@@ -5,9 +5,12 @@ from google import genai
 from google.genai import types
 import yagmail
 
-# Initialize the new Google GenAI Client
-# It automatically picks up GEMINI_API_KEY from environment variables
-client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+# --- STABILIZATION FIX ---
+# We explicitly set api_version to 'v1' to bypass the deprecated 'v1beta' endpoint.
+client = genai.Client(
+    api_key=os.environ["GEMINI_API_KEY"],
+    http_options={'api_version': 'v1'}
+)
 
 def get_next_genre():
     with open('genre.json', 'r') as f:
@@ -26,11 +29,12 @@ def get_next_genre():
     return genre_name
 
 def generate_content(genre):
-    # Using the updated Search Grounding tool syntax
+    # Using Search Grounding to find fresh inspiration
     prompt = (f"Search for unique, trending story prompts in the {genre} genre. "
               f"Based on your findings, write a high-quality short story with a unique title. "
               f"Format: TITLE: [Title] CONTENT: [Story Content]")
     
+    # Note: Use types.GoogleSearch() for the stable v1 API
     response = client.models.generate_content(
         model='gemini-1.5-flash',
         contents=prompt,
@@ -38,13 +42,19 @@ def generate_content(genre):
             tools=[types.Tool(google_search=types.GoogleSearch())]
         )
     )
+    
+    # In the new SDK, response.text is the correct way to access the string
     return response.text
 
 def save_and_email(genre, raw_text):
     # Parsing with safety fallback
     try:
-        title = raw_text.split("CONTENT:")[0].replace("TITLE:", "").strip()
-        content = raw_text.split("CONTENT:")[1].strip()
+        if "CONTENT:" in raw_text:
+            title = raw_text.split("CONTENT:")[0].replace("TITLE:", "").strip()
+            content = raw_text.split("CONTENT:")[1].strip()
+        else:
+            title = f"A Daily {genre} Tale"
+            content = raw_text
     except (IndexError, ValueError):
         title = f"A Daily {genre} Tale"
         content = raw_text
@@ -55,17 +65,22 @@ def save_and_email(genre, raw_text):
     folder_path = f"stories/{genre}"
     os.makedirs(folder_path, exist_ok=True)
     
-    with open(f"{folder_path}/{date_str}.md", "w") as f:
+    # Save the Markdown file
+    with open(f"{folder_path}/{date_str}.md", "w", encoding="utf-8") as f:
         f.write(f"# {title}\n\n**Genre: {genre}**\n**Date: {date_str}**\n\n{content}")
 
-    # Email Dispatch
-    with open('email_body.html', 'r') as f:
+    # Load Email Template
+    with open('email_body.html', 'r', encoding="utf-8") as f:
         template = f.read()
     
     html_content = template.replace("{{TITLE}}", title).replace("{{CONTENT}}", content).replace("{{GENRE}}", genre)
     
-    user_email = os.environ["EMAIL_USER"]
-    yag = yagmail.SMTP(user_email, os.environ["EMAIL_PASS"])
+    # Email Dispatch using Secrets
+    # Ensure your YAML matches these environment variable names!
+    user_email = os.environ.get("EMAIL_ID") or os.environ.get("EMAIL_USER")
+    user_pass = os.environ.get("EMAIL_PASSWORD") or os.environ.get("EMAIL_PASS")
+    
+    yag = yagmail.SMTP(user_email, user_pass)
     yag.send(to=user_email, subject=f"Project Kathani: {title}", contents=html_content)
 
 if __name__ == "__main__":
