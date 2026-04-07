@@ -2,8 +2,11 @@ name: Project Kathani Daily Pulse
 
 on:
   schedule:
-    - cron: '0 5 * * *' # 5 AM UTC
-  workflow_dispatch: # Allows manual trigger
+    - cron: '30 23 * * *' # Runs at 5:00 AM IST (23:30 UTC)
+  workflow_dispatch: # Allows manual testing
+
+permissions:
+  contents: write # Essential to allow the bot to push .md files to your repo
 
 jobs:
   build:
@@ -15,7 +18,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-         python-version: '3.11' # Upgraded from 3.9
+          python-version: '3.11'
 
       - name: Install Dependencies
         run: pip install -r requirements.txt
@@ -25,13 +28,12 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
-          RECEIVER_EMAIL: ${{ secrets.RECEIVER_EMAIL }}
         run: python scripts/generate_story.py
 
       - name: Commit and Push Changes
         run: |
-          git config --global user.name "Kathani-Bot"
-          git config --global user.email "bot@kathani.com"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add .
-          git commit -m "Archive: Story for $(date +'%Y-%m-%d')"
+          git commit -m "Archive: Story for $(date +'%Y-%m-%d')" || exit 0
           git push
