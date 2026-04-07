@@ -59,9 +59,9 @@ def save_and_email(genre, raw_text):
     
     html_content = template.replace("{{TITLE}}", title).replace("{{CONTENT}}", content).replace("{{GENRE}}", genre)
     
-    email_user = os.environ["EMAIL_USER"]
-    yag = yagmail.SMTP(email_user, os.environ["EMAIL_PASS"])
-    yag.send(to=email_user, subject=f"Project Kathani: {title}", contents=html_content)
+    email_id = os.environ["EMAIL_ID"]
+    yag = yagmail.SMTP(email_id, os.environ["EMAIL_PASSWORD"])
+    yag.send(to=email_id, subject=f"Project Kathani: {title}", contents=html_content)
 
 if __name__ == "__main__":
     current_genre = get_next_genre()
