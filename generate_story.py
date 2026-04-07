@@ -8,15 +8,17 @@ import yagmail
 genai.configure(api_key=os.environ["GEMINI_API_KEY"])
 
 def get_next_genre():
+    # Load the mapping and the state
     with open('genre.json', 'r') as f:
         genres = json.load(f)
     with open('today_genre.json', 'r') as f:
         today = json.load(f)
     
+    # Logic: 1 to 7 cycle
     next_index = (today['last_index'] % 7) + 1
     genre_name = genres[str(next_index)]
     
-    # Update today_genre.json
+    # Update memory for tomorrow
     today['last_index'] = next_index
     today['last_run'] = str(datetime.date.today())
     with open('today_genre.json', 'w') as f:
@@ -25,36 +27,56 @@ def get_next_genre():
     return genre_name
 
 def generate_content(genre):
-    # Using Gemini's built-in search tool capabilities for ideas
+    # Gemini 1.5 Flash with Search capability
     model = genai.GenerativeModel(
         model_name='gemini-1.5-flash',
         tools=[{"google_search_retrieval": {}}]
     )
     
-    prompt = f"Search for unique, trending story prompts or news in the {genre} genre. Based on findings, write a high-quality short story with a unique title. Format the output as: TITLE: [Title] CONTENT: [Story Content]"
+    prompt = (f"Search for unique, trending story prompts in the {genre} genre. "
+              f"Write a professional short story with a unique title. "
+              f"Output format: TITLE: [Title] CONTENT: [Story Content]")
     
     response = model.generate_content(prompt)
     return response.text
 
 def save_and_email(genre, raw_text):
-    title = raw_text.split("CONTENT:")[0].replace("TITLE:", "").strip()
-    content = raw_text.split("CONTENT:")[1].strip()
+    # Parsing Title and Body
+    try:
+        title = raw_text.split("CONTENT:")[0].replace("TITLE:", "").strip()
+        content = raw_text.split("CONTENT:")[1].strip()
+    except IndexError:
+        title = f"A {genre} Tale"
+        content = raw_text
+
     date_str = str(datetime.date.today())
     
-    # Save as Markdown
-    path = f"stories/{genre}/{date_str}.md"
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w") as f:
+    # --- AUTO-FOLDER GENERATION ---
+    # os.makedirs with exist_ok=True checks if folder exists; if not, it creates it.
+    folder_path = f"stories/{genre}"
+    os.makedirs(folder_path, exist_ok=True)
+    
+    file_path = f"{folder_path}/{date_str}.md"
+    with open(file_path, "w") as f:
         f.write(f"# {title}\n\n**Genre: {genre}**\n**Date: {date_str}**\n\n{content}")
 
-    # Send Email
+    # --- EMAIL DISPATCH ---
     with open('email_body.html', 'r') as f:
         template = f.read()
     
     html_content = template.replace("{{TITLE}}", title).replace("{{CONTENT}}", content).replace("{{GENRE}}", genre)
     
-    yag = yagmail.SMTP(os.environ["EMAIL_USER"], os.environ["EMAIL_PASS"])
-    yag.send(to=os.environ["RECEIVER_EMAIL"], subject=f"Kathani Daily: {title}", contents=html_content)
+    # Using EMAIL_USER for both sender and receiver
+    email_id = os.environ["EMAIL_ID"]
+    email_password = os.environ["EMAIL_PASSWORD"]
+    
+    yag = yagmail.SMTP(email_id, email_password)
+    yag.send(
+        to=email_id, 
+        subject=f"Project Kathani | {genre}: {title}", 
+        contents=html_content
+    )
+    print(f"Successfully archived and sent: {title}")
 
 if __name__ == "__main__":
     current_genre = get_next_genre()
