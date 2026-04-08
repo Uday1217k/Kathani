@@ -33,13 +33,12 @@ def get_next_genre():
     return genre_name
 
 def generate_content(genre):
-    """The Master Storyteller: Uses Native Google Search and includes Safety Nets."""
-    print(f"Commissioning a {genre} story from Gemini...")
+    """The Master Storyteller: Relies on vast internal creativity for maximum stability."""
+    print(f"Commissioning a highly original {genre} story from Gemini...")
     
+    # We remove the command to search the web, and instead command pure creativity.
     prompt = (
-        f"Act as a professional author. Write a short story in the {genre} genre.\n"
-        f"FIRST, use your Google Search tool to find a unique '{genre} short story writing prompt' on the internet. "
-        f"Then, use that prompt as the inspiration seed for your story.\n\n"
+        f"Act as a professional author. Write a highly original and creative short story in the {genre} genre.\n\n"
         "STRICT EDITORIAL RULES:\n"
         "1. Use basic, everyday English. Eradicate high vocabulary, dense metaphors, and confusing phrasal verbs.\n"
         "2. No AI hallucinations or non-sense words. Keep the plot logical and grounded.\n"
@@ -54,27 +53,26 @@ def generate_content(genre):
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            # Utilizing the modern SDK with Native Search Activated
+            # We remove the 'config' tool parameter to prevent empty Function Calls.
+            # The AI will now return pure text 100% of the time.
             response = client.models.generate_content(
                 model='gemini-2.5-flash',
-                contents=prompt,
-                config={'tools': [{'google_search': {}}]} 
+                contents=prompt
             )
             
-            # THE SAFETY SHIELD: Check if the AI's safety filter blocked the text
+            # The safety shield remains, just in case a true safety violation occurs
             if not response.text:
                 print("Safety filter triggered. Response was empty.")
                 return (
                     f"TITLE: The Censored {genre} Tale\n"
                     f"CHARACTERS: The Digital Censor\n"
-                    f"BODY: Gemini attempted to write a {genre} story today, but it triggered Google's strict safety filters (likely due to action, violence, or sensitive themes). The narrative was blocked at the source.\n"
+                    f"BODY: Gemini attempted to write a {genre} story today, but it triggered Google's strict safety filters. The narrative was blocked at the source.\n"
                     f"CONCLUSION: We shall try for a safer tale tomorrow."
                 )
                 
             return response.text
             
         except Exception as e:
-            # Gracefully handle server traffic spikes (503) or rate limits (429)
             if '503' in str(e) or 'UNAVAILABLE' in str(e) or '429' in str(e):
                 if attempt < max_retries - 1:
                     print(f"Gemini server is busy. Retrying in 30 seconds... (Attempt {attempt + 1} of {max_retries})")
