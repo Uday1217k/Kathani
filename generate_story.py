@@ -1,50 +1,17 @@
 import os
 import json
 import datetime
-import requests
-from bs4 import BeautifulSoup
-from googlesearch import search
+import time
 from google import genai
 import yagmail
 
 # --- Configuration ---
 client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
 
-def get_web_inspiration(genre):
-    """The Digital Scout: Scrapes the web for real-time prompt ideas."""
-    query = f"latest {genre} short story writing prompts ideas"
-    inspiration_text = ""
-    print(f"Scraping the web for {genre} inspiration...")
-    
-    try:
-        search_results = search(query, sleep_interval=2)
-        urls = []
-        for i, url in enumerate(search_results):
-            urls.append(url)
-            if i >= 2:  # Get top 3 URLs
-                break
-
-        for url in urls:
-            try:
-                response = requests.get(url, timeout=5)
-                soup = BeautifulSoup(response.text, 'html.parser')
-                meta = soup.find('meta', attrs={'name': 'description'})
-                if meta:
-                    inspiration_text += meta['content'] + " "
-                else:
-                    paragraphs = soup.find_all('p')
-                    inspiration_text += " ".join([p.text for p in paragraphs[:2]]) + " "
-                break
-            except Exception:
-                continue
-    except Exception as e:
-        print(f"Search failed, relying on internal creativity: {e}")
-        
-    return inspiration_text.strip() if inspiration_text else f"An unusual {genre} scenario."
-
 def get_next_genre():
+    """Reads the schedule and memory to determine today's genre."""
     if not os.path.exists('genre.json') or not os.path.exists('today_genre.json'):
-        print("Configuration files missing! Returning default.")
+        print("Configuration files missing! Returning default 'Fantasy'.")
         return "Fantasy"
 
     with open('genre.json', 'r') as f:
@@ -52,6 +19,7 @@ def get_next_genre():
     with open('today_genre.json', 'r') as f:
         today = json.load(f)
     
+    # Cycles through days 1-7 safely
     next_index = (today['last_index'] % 7) + 1
     genre_name = genres.get(str(next_index), "Fantasy")
     
@@ -62,38 +30,62 @@ def get_next_genre():
     
     return genre_name
 
-def generate_content(genre, inspiration):
-    """The Master Storyteller: Prompts Gemini with strict constraints."""
+def generate_content(genre):
+    """The Master Storyteller: Uses Native Google Search for inspiration."""
+    print(f"Commissioning a {genre} story from Gemini...")
+    
     prompt = (
         f"Act as a professional author. Write a short story in the {genre} genre.\n"
-        f"Use this scraped web concept as a loose inspiration seed: \"{inspiration}\"\n\n"
+        f"FIRST, use your Google Search tool to find a unique '{genre} short story writing prompt' on the internet. "
+        f"Then, use that prompt as the inspiration seed for your story.\n\n"
         "STRICT EDITORIAL RULES:\n"
         "1. Use basic, everyday English. Eradicate high vocabulary, dense metaphors, and confusing phrasal verbs.\n"
         "2. No AI hallucinations or non-sense words. Keep the plot logical and grounded.\n"
         "3. Give the story a 'tangy flavor'—make it engaging, lively, and include a clever twist!\n\n"
         "Structure your response EXACTLY with these four headings (do not bold the headings):\n"
         "TITLE: [Your Story Title]\n"
-        "CHARACTERS: [List the characters and their relations, e.g., John (Brother), Mary (Sister)]\n"
+        "CHARACTERS: [List the characters and their relations]\n"
         "BODY: [The full text of the story in simple paragraphs]\n"
         "CONCLUSION: [A clear ending or the final twist]"
     )
     
-    response = client.models.generate_content(
-        model='gemini-2.5-flash',
-        contents=prompt
-    )
-    return response.text
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            # Utilizing the modern SDK with Native Search Activated
+            response = client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=prompt,
+                config={'tools': [{'google_search': {}}]} 
+            )
+            return response.text
+        except Exception as e:
+            # Gracefully handle server traffic spikes (503) or rate limits (429)
+            if '503' in str(e) or 'UNAVAILABLE' in str(e) or '429' in str(e):
+                if attempt < max_retries - 1:
+                    print(f"Gemini server is busy. Retrying in 30 seconds... (Attempt {attempt + 1} of {max_retries})")
+                    time.sleep(30)
+                else:
+                    print("Max retries reached. The Gemini API is overwhelmed.")
+                    return (
+                        f"TITLE: The Silent {genre}\n"
+                        f"CHARACTERS: The Automated Scribe\n"
+                        f"BODY: The digital muses were overwhelmed today. The servers were too crowded to weave our daily tale.\n"
+                        f"CONCLUSION: We shall try again tomorrow."
+                    )
+            else:
+                print(f"An unexpected Gemini error occurred: {e}")
+                return f"TITLE: A Technical Hitch\nCHARACTERS: None\nBODY: An unexpected error occurred: {e}\nCONCLUSION: End."
 
 def save_and_email(genre, raw_text):
-    """The Archivist and Courier: Parses, saves, and dispatches."""
-    # Carefully parsing the strict four-part structure
+    """The Archivist and Courier: Parses the 4-part structure, saves, and emails."""
     try:
         title = raw_text.split("TITLE:")[1].split("CHARACTERS:")[0].strip()
         characters = raw_text.split("CHARACTERS:")[1].split("BODY:")[0].strip()
         body = raw_text.split("BODY:")[1].split("CONCLUSION:")[0].strip()
         conclusion = raw_text.split("CONCLUSION:")[1].strip()
     except IndexError:
-        # Fallback if the AI slightly misbehaves on formatting
+        # Fallback if the AI slightly alters the formatting
         title = f"The {genre} Chronicles"
         characters = "Unknown Cast"
         body = raw_text
@@ -115,18 +107,16 @@ def save_and_email(genre, raw_text):
         )
         f.write(md_content)
 
-    # 2. Prepare HTML Email
-    # We replace the placeholders in your template with our beautifully parsed sections
+    # 2. Prepare and Send HTML Email
     try:
         with open('email_body.html', 'r', encoding="utf-8") as f:
             template = f.read()
         
-        # Formatting the text for HTML readability
+        # Format line breaks for HTML
         formatted_characters = characters.replace('\n', '<br>')
         formatted_body = body.replace('\n', '<br><br>')
         formatted_conclusion = conclusion.replace('\n', '<br>')
         
-        # Combining them into the {{CONTENT}} block of your HTML
         combined_content = (
             f"<strong>Characters:</strong><br>{formatted_characters}<br><br>"
             f"<strong>The Story:</strong><br>{formatted_body}<br><br>"
@@ -135,20 +125,16 @@ def save_and_email(genre, raw_text):
 
         html_content = template.replace("{{TITLE}}", title).replace("{{CONTENT}}", combined_content).replace("{{GENRE}}", genre)
         
-        # FIXED: Ensure we are using EMAIL_ID to match your GitHub Secrets!
         user_email = os.environ["EMAIL_ID"]
         user_pass = os.environ["EMAIL_PASSWORD"]
         
         yag = yagmail.SMTP(user_email, user_pass)
         yag.send(to=user_email, subject=f"Kathani Daily: {title} ({genre})", contents=html_content)
-        print(f"Success! '{title}' has been archived and dispatched.")
+        print(f"Success! '{title}' has been safely archived and dispatched to your inbox.")
     except Exception as e:
-        print(f"File saved, but email failed: {e}")
+        print(f"File saved to repository, but email delivery failed: {e}")
 
 if __name__ == "__main__":
     current_genre = get_next_genre()
-    # Let the scout find inspiration first
-    scraped_idea = get_web_inspiration(current_genre)
-    # Pass both genre and inspiration to the storyteller
-    story_data = generate_content(current_genre, scraped_idea)
+    story_data = generate_content(current_genre)
     save_and_email(current_genre, story_data)
