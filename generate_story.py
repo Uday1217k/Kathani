@@ -12,17 +12,17 @@ client = genai.Client(
 )
 
 def get_next_genre():
-    # Load genre lists and tracking data
+    # Files are now in the same directory as the script
     with open('genre.json', 'r') as f:
         genres = json.load(f)
     with open('today_genre.json', 'r') as f:
         today = json.load(f)
     
-    # Cycle through 7 genres
+    # Cycle through genres (1-7)
     next_index = (today['last_index'] % 7) + 1
     genre_name = genres[str(next_index)]
     
-    # Update tracker
+    # Update memory
     today['last_index'] = next_index
     today['last_run'] = str(datetime.date.today())
     with open('today_genre.json', 'w') as f:
@@ -31,12 +31,12 @@ def get_next_genre():
     return genre_name
 
 def generate_content(genre):
-    prompt = (f"Write a high-quality, professional short story in the {genre} genre. "
+    prompt = (f"Write a high-quality short story in the {genre} genre. "
               f"Include a unique title. "
-              f"Format the output exactly as: TITLE: [Title] CONTENT: [Story Content]")
+              f"Format: TITLE: [Title] CONTENT: [Story Content]")
     
     try:
-        # Attempt generation with Google Search Grounding
+        # Attempt with Search Grounding
         response = client.models.generate_content(
             model='gemini-1.5-flash',
             contents=prompt,
@@ -46,10 +46,8 @@ def generate_content(genre):
         )
         return response.text
     except Exception as e:
-        print(f"Search Grounding unavailable or syntax error: {e}")
-        print("Switching to standard generation mode...")
-        
-        # Fallback: Standard generation (No tools) to prevent 400 Errors
+        print(f"Grounding failed: {e}. Falling back to standard generation.")
+        # Fallback to prevent 400 errors
         response = client.models.generate_content(
             model='gemini-1.5-flash',
             contents=prompt
@@ -60,10 +58,11 @@ def save_and_email(genre, raw_text):
     # Parse Title and Content
     try:
         if "CONTENT:" in raw_text:
-            title = raw_text.split("CONTENT:")[0].replace("TITLE:", "").strip()
-            content = raw_text.split("CONTENT:")[1].strip()
+            parts = raw_text.split("CONTENT:")
+            title = parts[0].replace("TITLE:", "").strip()
+            content = parts[1].strip()
         else:
-            title = f"A {genre} Tale"
+            title = f"The {genre} Chronicles"
             content = raw_text
     except:
         title = f"Daily {genre} Dispatch"
@@ -71,27 +70,30 @@ def save_and_email(genre, raw_text):
 
     date_str = str(datetime.date.today())
     
-    # Archive the story in the repo
-    folder_path = f"stories/{genre}"
+    # Save to the 'stories/' directory as per your structure
+    folder_path = os.path.join("stories", genre)
     os.makedirs(folder_path, exist_ok=True)
-    with open(f"{folder_path}/{date_str}.md", "w", encoding="utf-8") as f:
+    
+    file_path = os.path.join(folder_path, f"{date_str}.md")
+    with open(file_path, "w", encoding="utf-8") as f:
         f.write(f"# {title}\n\n**Genre: {genre}**\n**Date: {date_str}**\n\n{content}")
 
-    # Prepare and Send Email
+    # Email Dispatch
     try:
         with open('email_body.html', 'r', encoding="utf-8") as f:
             template = f.read()
         
         html_content = template.replace("{{TITLE}}", title).replace("{{CONTENT}}", content).replace("{{GENRE}}", genre)
         
-        email_user = os.environ["EMAIL_USER"]
-        email_pass = os.environ["EMAIL_PASS"]
+        # Use existing environment variable names from your workflow
+        user_email = os.environ["EMAIL_USER"]
+        user_pass = os.environ["EMAIL_PASS"]
         
-        yag = yagmail.SMTP(email_user, email_pass)
-        yag.send(to=email_user, subject=f"Project Kathani: {title}", contents=html_content)
-        print("Email dispatched successfully.")
+        yag = yagmail.SMTP(user_email, user_pass)
+        yag.send(to=user_email, subject=f"Project Kathani: {title}", contents=html_content)
+        print(f"Success: {genre} story dispatched and archived.")
     except Exception as e:
-        print(f"Email failed: {e}")
+        print(f"Email error: {e}")
 
 if __name__ == "__main__":
     current_genre = get_next_genre()
