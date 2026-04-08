@@ -36,5 +36,5 @@ jobs:
           git config --global user.name "Kathani-Agent"
           git config --global user.email "kathani@actions.github.com"
           git add stories/ today_genre.json
-          git commit -m "chore(story): add daily tale and update genre tracker" || echo "No changes to commit"
+          git commit -m "Story Successfully Archived" || echo "No changes to commit"
           git push
