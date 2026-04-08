@@ -2,11 +2,11 @@ name: Project Kathani Daily Pulse
 
 on:
   schedule:
-    - cron: '30 23 * * *' # Runs at 5:00 AM IST (23:30 UTC)
-  workflow_dispatch: # Allows manual testing
+    - cron: '30 23 * * *' # 5:00 AM IST
+  workflow_dispatch: 
 
 permissions:
-  contents: write # Essential to allow the bot to push .md files to your repo
+  contents: write
 
 jobs:
   build:
@@ -28,7 +28,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
-        run: python scripts/generate_story.py
+        run: python generate_story.py  # Path updated to root
 
       - name: Commit and Push Changes
         run: |
