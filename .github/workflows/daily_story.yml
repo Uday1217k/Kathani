@@ -1,4 +1,4 @@
-name: Project Kathani Daily Pulse
+name: Project Kathani
 
 on:
   schedule:
@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  Generate:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repo
@@ -27,7 +27,7 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
-          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASSWORD }}
         run: python generate_story.py  # Path updated to root
 
       - name: Commit and Push Changes
@@ -35,5 +35,5 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add .
-          git commit -m "Archive: Story for $(date +'%Y-%m-%d')" || exit 0
+          git commit -m "Story for $(date +'%Y-%m-%d')" || exit 0
           git push
