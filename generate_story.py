@@ -31,7 +31,7 @@ def get_next_genre():
     return genre_name
 
 def generate_content(genre):
-    """The Master Storyteller: Uses Native Google Search for inspiration."""
+    """The Master Storyteller: Uses Native Google Search and includes Safety Nets."""
     print(f"Commissioning a {genre} story from Gemini...")
     
     prompt = (
@@ -58,7 +58,19 @@ def generate_content(genre):
                 contents=prompt,
                 config={'tools': [{'google_search': {}}]} 
             )
+            
+            # THE SAFETY SHIELD: Check if the AI's safety filter blocked the text
+            if not response.text:
+                print("Safety filter triggered. Response was empty.")
+                return (
+                    f"TITLE: The Censored {genre} Tale\n"
+                    f"CHARACTERS: The Digital Censor\n"
+                    f"BODY: Gemini attempted to write a {genre} story today, but it triggered Google's strict safety filters (likely due to action, violence, or sensitive themes). The narrative was blocked at the source.\n"
+                    f"CONCLUSION: We shall try for a safer tale tomorrow."
+                )
+                
             return response.text
+            
         except Exception as e:
             # Gracefully handle server traffic spikes (503) or rate limits (429)
             if '503' in str(e) or 'UNAVAILABLE' in str(e) or '429' in str(e):
@@ -79,6 +91,16 @@ def generate_content(genre):
 
 def save_and_email(genre, raw_text):
     """The Archivist and Courier: Parses the 4-part structure, saves, and emails."""
+    
+    # THE FALLBACK: Ensure raw_text is never None before we try to split it
+    if not raw_text:
+        raw_text = (
+            f"TITLE: The Missing {genre} Tale\n"
+            f"CHARACTERS: Unknown\n"
+            f"BODY: A fatal error occurred and the story text vanished before parsing.\n"
+            f"CONCLUSION: End."
+        )
+
     try:
         title = raw_text.split("TITLE:")[1].split("CHARACTERS:")[0].strip()
         characters = raw_text.split("CHARACTERS:")[1].split("BODY:")[0].strip()
