@@ -1,5 +1,2 @@
 google-genai
 yagmail
-beautifulsoup4
-requests
-googlesearch-python
