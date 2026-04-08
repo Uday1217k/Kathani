@@ -33,10 +33,9 @@ def get_next_genre():
     return genre_name
 
 def generate_content(genre):
-    """The Master Storyteller: Relies on vast internal creativity for maximum stability."""
+    """The Master Storyteller: Relies solely on vast internal creativity."""
     print(f"Commissioning a highly original {genre} story from Gemini...")
     
-    # We remove the command to search the web, and instead command pure creativity.
     prompt = (
         f"Act as a professional author. Write a highly original and creative short story in the {genre} genre.\n\n"
         "STRICT EDITORIAL RULES:\n"
@@ -53,14 +52,14 @@ def generate_content(genre):
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            # We remove the 'config' tool parameter to prevent empty Function Calls.
-            # The AI will now return pure text 100% of the time.
+            # Pure generation: No search tools, no external configs. 
+            # The AI will return pure text 100% of the time.
             response = client.models.generate_content(
                 model='gemini-2.5-flash',
                 contents=prompt
             )
             
-            # The safety shield remains, just in case a true safety violation occurs
+            # The safety shield remains intact
             if not response.text:
                 print("Safety filter triggered. Response was empty.")
                 return (
@@ -92,7 +91,6 @@ def generate_content(genre):
 def save_and_email(genre, raw_text):
     """The Archivist and Courier: Parses the 4-part structure, saves, and emails using pure SMTP."""
     
-    # THE FALLBACK: Ensure raw_text is never None before we try to split it
     if not raw_text:
         raw_text = (
             f"TITLE: The Missing {genre} Tale\n"
