@@ -2,8 +2,10 @@ import os
 import json
 import datetime
 import time
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from google import genai
-import yagmail
 
 # --- Configuration ---
 client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
@@ -90,7 +92,7 @@ def generate_content(genre):
                 return f"TITLE: A Technical Hitch\nCHARACTERS: None\nBODY: An unexpected error occurred: {e}\nCONCLUSION: End."
 
 def save_and_email(genre, raw_text):
-    """The Archivist and Courier: Parses the 4-part structure, saves, and emails."""
+    """The Archivist and Courier: Parses the 4-part structure, saves, and emails using pure SMTP."""
     
     # THE FALLBACK: Ensure raw_text is never None before we try to split it
     if not raw_text:
@@ -129,7 +131,7 @@ def save_and_email(genre, raw_text):
         )
         f.write(md_content)
 
-    # 2. Prepare and Send HTML Email
+    # 2. Prepare and Send HTML Email via SMTP
     try:
         with open('email_body.html', 'r', encoding="utf-8") as f:
             template = f.read()
@@ -150,9 +152,21 @@ def save_and_email(genre, raw_text):
         user_email = os.environ["EMAIL_ID"]
         user_pass = os.environ["EMAIL_PASSWORD"]
         
-        yag = yagmail.SMTP(user_email, user_pass)
-        yag.send(to=user_email, subject=f"Kathani Daily: {title} ({genre})", contents=html_content)
-        print(f"Success! '{title}' has been safely archived and dispatched to your inbox.")
+        # Crafting the MIME Message
+        msg = MIMEMultipart()
+        msg['From'] = user_email
+        msg['To'] = user_email
+        msg['Subject'] = f"Kathani Daily: {title} ({genre})"
+        msg.attach(MIMEText(html_content, 'html'))
+
+        # Engaging the native SMTP server
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(user_email, user_pass)
+        server.send_message(msg)
+        server.quit()
+        
+        print(f"Success! '{title}' has been safely archived and dispatched to your inbox via SMTP.")
     except Exception as e:
         print(f"File saved to repository, but email delivery failed: {e}")
 
